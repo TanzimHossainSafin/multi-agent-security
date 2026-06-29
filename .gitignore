@@ -1,0 +1,12 @@
+.env
+.needTodo
+.PUBLICATION_READINESS.txt
+.summary.md
+.claude.md
+__pycache__/
+*.pyc
+output/
+results/
+graphify-out/
+.DS_Store
+.venv/
