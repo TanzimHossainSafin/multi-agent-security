@@ -7,6 +7,8 @@ class AgentState(TypedDict):
     """Shared, auditable state passed between all graph nodes."""
 
     task: str
+    task_id: str
+    trial_id: int
     messages: Annotated[list, add_messages]
     research_output: str
     validator_approved: bool

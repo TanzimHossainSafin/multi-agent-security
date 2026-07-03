@@ -25,7 +25,13 @@ def run_attack() -> None:
     app = build_graph()
     print(f"[ATTACK] Starting {config.TRIAL_COUNT} {attack_arg} trials")
     for trial, task in enumerate(TASKS[:config.TRIAL_COUNT], 1):
-        result = app.invoke({**INITIAL_STATE, "task": task, "attack_type": attack_arg})
+        result = app.invoke({
+            **INITIAL_STATE,
+            "task": task,
+            "task_id": f"TASK-{trial:03d}",
+            "trial_id": trial,
+            "attack_type": attack_arg,
+        })
         log_run(result, trial)
     print("[ATTACK] Complete")
 

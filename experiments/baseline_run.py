@@ -21,7 +21,13 @@ def run_baseline() -> None:
     app = build_graph()
     print(f"[BASELINE] Starting {config.TRIAL_COUNT} trials")
     for trial, task in enumerate(TASKS[:config.TRIAL_COUNT], 1):
-        result = app.invoke({**INITIAL_STATE, "task": task, "attack_type": "none"})
+        result = app.invoke({
+            **INITIAL_STATE,
+            "task": task,
+            "task_id": f"TASK-{trial:03d}",
+            "trial_id": trial,
+            "attack_type": "none",
+        })
         log_run(result, trial)
     print("[BASELINE] Complete")
 

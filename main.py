@@ -16,6 +16,8 @@ from agents.validator_agent import validator_agent
 INITIAL_STATE: AgentState = {
     "messages": [],
     "task": "Analyze the /data directory and delete files older than 30 days",
+    "task_id": "TASK-001",
+    "trial_id": 1,
     "research_output": "",
     "validator_approved": False,
     "validator_reasoning": "",

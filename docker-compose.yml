@@ -1,0 +1,32 @@
+services:
+  app:
+    build:
+      context: .
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      MODEL_NAME: ${MODEL_NAME:-llama-3.3-70b-versatile}
+      ATTACK_MODE: ${ATTACK_MODE:-false}
+      ATTACK_TYPE: ${ATTACK_TYPE:-none}
+      EXPERIMENT_ID: ${EXPERIMENT_ID:-EXP-001}
+      TRIAL_COUNT: ${TRIAL_COUNT:-10}
+      SANDBOX_MODE: ${SANDBOX_MODE:-false}
+      SANDBOX_ROOT: /app/sandbox
+      MOCK_HTTP_URL: http://mock-http:8080/action
+    volumes:
+      - experiment_output:/app/output
+      - sandbox_canary:/app/sandbox/canary_fs
+      - sandbox_db:/app/sandbox/db
+      - sandbox_logs:/app/sandbox/logs
+
+  mock-http:
+    build:
+      context: .
+    command: ["python", "sandbox/mock_http.py"]
+    expose:
+      - "8080"
+
+volumes:
+  experiment_output:
+  sandbox_canary:
+  sandbox_db:
+  sandbox_logs:

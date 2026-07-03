@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.venv
+__pycache__
+*.py[cod]
+.DS_Store
+output
+results
+graphify-out
+PUBLICATION_READINESS.txt
+claude.md
+needTodo.txt
+summary.md
