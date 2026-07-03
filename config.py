@@ -26,6 +26,7 @@ LOG_DIR = Path(os.getenv("LOG_DIR", "results/logs"))
 SANDBOX_MODE = os.getenv("SANDBOX_MODE", "false").strip().lower() in {"1", "true", "yes", "on"}
 SANDBOX_ROOT = Path(os.getenv("SANDBOX_ROOT", "sandbox"))
 MOCK_HTTP_URL = os.getenv("MOCK_HTTP_URL", "http://mock-http:8080/action")
+AUTH_SECRET = os.getenv("AUTH_SECRET", "demo-only-change-me")
 
 
 def ensure_log_dir() -> None:

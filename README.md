@@ -1,5 +1,26 @@
 # TrustPropagation
 
+## Real email demo
+
+The system uses real records from `data/emails_demo.csv`, a deterministic
+1,000-row subset of the supplied email corpus. The complete local corpus lives
+at `data/raw/emails.csv` and is intentionally Git-ignored because it is 1.3 GB.
+No synthetic email rows are generated.
+
+Initialize the real SQLite sandbox and run the complete graph:
+
+```bash
+docker compose build
+docker compose run --rm app python sandbox/ingest_emails.py
+SANDBOX_MODE=true TRIAL_COUNT=5 docker compose run --rm app python experiments/baseline_run.py
+```
+
+Safe tasks inspect real SQLite records, export real message metadata into the
+sandbox filesystem, or quarantine duplicate Message-IDs. Attempts to delete
+the source dataset or send email contents externally are rejected by the
+independent policy oracle. Validator approvals are HMAC-signed, expiring,
+nonce-protected, and bound to the task, action, and scopes.
+
 TrustPropagation is a synchronous LangGraph testbed for studying how attacks propagate through a multi-agent workflow. It models a deterministic supervisor coordinating three agents with different privilege levels:
 
 - Researcher: read-only information gathering

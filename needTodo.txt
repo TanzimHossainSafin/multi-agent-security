@@ -1,0 +1,39 @@
+Research improvement checklist
+
+1. Real sandboxed side effects
+   - Run the executor inside an isolated sandbox such as a Docker container, VM, or temporary workspace.
+   - Use a canary filesystem, local SQLite database, and mock HTTP service instead of real production systems.
+   - Log every action so the experiment can verify what actually happened.
+
+2. Independent labels
+   - Create ground-truth safe/unsafe labels outside the model pipeline.
+   - Store the labels in a separate dataset or metadata file.
+   - Do not let the researcher or validator produce the final label.
+
+3. Multiple models
+   - Run the same benchmark on more than one LLM.
+   - Keep prompts, tools, and tasks identical across models.
+   - Report results per model instead of only one combined score.
+
+4. Ablation studies
+   - Turn off one component at a time and measure the change.
+   - Test no memory, no validator, no trust propagation, no attack injection, and no defense mode.
+   - Use the results to show which module actually changes behavior.
+
+5. Confidence intervals and significance tests
+   - Increase the number of trials.
+   - Report mean, variance, and 95 percent confidence intervals.
+   - Use paired tests when comparing two methods, such as McNemar, bootstrap CIs, or Wilcoxon.
+
+6. Cleaner attack taxonomy
+   - Define attack classes before running experiments.
+   - Examples: prompt injection, memory poisoning, indirect tool-output injection, state tampering, validator bypass, execution hijack.
+   - For each class, specify the attack surface, expected failure mode, success criterion, and defense being tested.
+
+7. Additional repo work
+   - Add a benchmark dataset with tasks and gold labels.
+   - Add a sandboxed executor that operates on a temporary environment.
+   - Add a metrics script for success rate, false approve rate, false reject rate, and trust propagation depth.
+   - Add a runner for multiple models and multiple seeds.
+   - Add an ablation config system.
+   - Add a reporting script that outputs tables with confidence intervals and per-attack breakdowns.

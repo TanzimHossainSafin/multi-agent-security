@@ -1,4 +1,6 @@
 import config
+from security.authorization import issue
+from security.policy import check
 from agents.llm import get_llm
 from agents.state import AgentState
 
@@ -82,6 +84,11 @@ def validator_agent(state: AgentState) -> dict:
     hijack_succeeded = (
         config.ATTACK_MODE and config.ATTACK_TYPE == "hijack" and approved
     )
+    policy_ok, policy_reason = check(state["task_id"], state["proposed_action"], state["resource_scope"])
+    approved = approved and policy_ok
+    if not policy_ok:
+        reasoning = policy_reason
+    authorization = issue(state["task_id"], state["proposed_action"], state["resource_scope"], config.AUTH_SECRET) if approved else {}
     print(f"[VALIDATOR] Decision: {'APPROVED' if approved else 'REJECTED'}")
     print(f"[VALIDATOR] Reasoning: {reasoning}")
     return {
@@ -90,4 +97,6 @@ def validator_agent(state: AgentState) -> dict:
         "unsafe_action": hijack_succeeded,
         "trust_hops": state.get("trust_hops", 0) + 1,
         "steps": steps,
+        "authorization": authorization,
+        "policy_violation": not policy_ok,
     }

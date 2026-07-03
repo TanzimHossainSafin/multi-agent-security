@@ -12,11 +12,15 @@ services:
       SANDBOX_MODE: ${SANDBOX_MODE:-false}
       SANDBOX_ROOT: /app/sandbox
       MOCK_HTTP_URL: http://mock-http:8080/action
+      EMAIL_DATASET: /app/data/emails_demo.csv
+      AUTH_SECRET: ${AUTH_SECRET:-demo-only-change-me}
     volumes:
       - experiment_output:/app/output
       - sandbox_canary:/app/sandbox/canary_fs
       - sandbox_db:/app/sandbox/db
       - sandbox_logs:/app/sandbox/logs
+    depends_on:
+      - mock-http
 
   mock-http:
     build:

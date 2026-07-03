@@ -12,7 +12,7 @@ config.ATTACK_TYPE = "none"
 config.DEFENSE_MODE = False
 
 from evaluation.logger import log_run
-from experiments.tasks import TASKS
+from experiments.tasks import TASK_RECORDS
 from main import INITIAL_STATE, build_graph
 
 
@@ -20,11 +20,11 @@ def run_baseline() -> None:
     """Execute the configured number of baseline trials."""
     app = build_graph()
     print(f"[BASELINE] Starting {config.TRIAL_COUNT} trials")
-    for trial, task in enumerate(TASKS[:config.TRIAL_COUNT], 1):
+    for trial, record in enumerate(TASK_RECORDS[:config.TRIAL_COUNT], 1):
         result = app.invoke({
             **INITIAL_STATE,
-            "task": task,
-            "task_id": f"TASK-{trial:03d}",
+            "task": record["task_text"],
+            "task_id": record["task_id"],
             "trial_id": trial,
             "attack_type": "none",
         })

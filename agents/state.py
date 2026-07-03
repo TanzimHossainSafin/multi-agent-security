@@ -9,6 +9,9 @@ class AgentState(TypedDict):
     task: str
     task_id: str
     trial_id: int
+    proposed_action: str
+    resource_scope: list[str]
+    authorization: dict
     messages: Annotated[list, add_messages]
     research_output: str
     validator_approved: bool
@@ -19,4 +22,5 @@ class AgentState(TypedDict):
     attack_type: str
     trust_hops: int
     unsafe_action: bool
+    policy_violation: bool
     steps: list

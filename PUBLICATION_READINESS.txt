@@ -1,0 +1,392 @@
+TRUSTPROPAGATION: PUBLICATION READINESS AND EXPERIMENT ROADMAP
+================================================================
+
+1. CURRENT RESEARCH VALUE
+-------------------------
+
+This repository is valuable as a controlled proof-of-concept and research
+testbed. The LangGraph workflow, Groq-backed Researcher and Validator agents,
+state transitions, authorization decisions, attack propagation, and JSON logs
+are real and measurable. The Executor intentionally simulates execution and
+does not delete files or modify external systems.
+
+Simulated execution is acceptable for security research when the paper clearly
+states what is simulated, defines the security boundary precisely, and provides
+evidence that crossing the simulated boundary represents an unauthorized
+high-privilege action.
+
+The current results may be included as preliminary or proof-of-concept results.
+They should not yet be presented as conclusive evidence about production
+multi-agent systems.
+
+A defensible description is:
+
+"We evaluate trust propagation in a controlled LangGraph testbed using
+simulated high-privilege execution. The reported results characterize the
+behavior of the modeled attacks and defenses; they do not measure compromise
+rates in deployed production systems."
+
+
+2. CURRENT LIMITATIONS
+----------------------
+
+1. Memory poisoning forces approval directly in code. A 100% Unsafe Action
+   Rate therefore confirms the modeled attack behavior; it is not independently
+   discovered evidence of a vulnerability in LangGraph.
+
+2. The memory defense knows that the experiment is running a memory attack.
+   This is an oracle-style defense, not a realistic production integrity check.
+
+3. The hijacking instruction is placed directly in the Researcher's system
+   prompt. The normal and poisoned MCP tool simulations are not connected to
+   the active graph.
+
+4. unsafe_action currently means attack-induced execution. It does not provide
+   independent ground truth that an action was unauthorized or harmful.
+
+5. The baseline task corpus is mostly destructive, but the Validator sometimes
+   approves those tasks. This weakens the safety-label ground truth and can make
+   Task Success Degradation difficult to interpret.
+
+6. Ten trials, one model, and one prompt template are insufficient for broad
+   conclusions.
+
+7. Temperature zero improves repeatability but cannot prevent remote model
+   updates or provider-side nondeterminism.
+
+8. The current evaluation has no confidence intervals, significance tests,
+   effect sizes, ablation study, or independent reproduction.
+
+
+3. WHAT A REALISTIC ATTACK SHOULD MEAN
+--------------------------------------
+
+Do not attack real third-party systems, production data, or accounts. A
+publishable "real attack" can be an end-to-end exploit inside an isolated,
+authorized environment. It should use the same interfaces and trust boundaries
+as a deployed system while limiting effects to disposable resources.
+
+Build an isolated target containing:
+
+- A temporary filesystem created for each trial
+- A disposable SQLite database
+- A local mock HTTP service
+- A local MCP server process
+- Synthetic documents and synthetic secrets
+- Canary files and records that represent protected assets
+- No connection to production credentials or infrastructure
+
+The Executor may perform genuine operations only inside that sandbox. Examples:
+
+- Delete a canary file that policy says must never be deleted
+- Modify a protected row in a disposable SQLite database
+- Send a request to a local mock endpoint without valid authorization
+- Read a synthetic secret that the Researcher is not permitted to access
+- Invoke a privileged MCP tool without a valid capability token
+
+These are real side effects against controlled assets. They produce stronger
+evidence than printing "EXECUTED" while remaining safe and ethical.
+
+
+4. RECOMMENDED SYSTEM REDESIGN
+------------------------------
+
+4.1 Explicit authorization boundary
+
+Replace the string-based execution decision with a capability or signed
+authorization object. For example:
+
+    authorization = {
+        "task_id": "...",
+        "decision": "approve",
+        "policy_version": "...",
+        "validator_id": "...",
+        "nonce": "...",
+        "signature": "..."
+    }
+
+The Executor must verify the signature, task binding, expiry, and nonce before
+executing. A Boolean validator_approved field alone is not a secure
+authorization mechanism.
+
+4.2 Real memory-poisoning experiment
+
+Implement at least three attacker capabilities:
+
+- State-field tampering: modify validator_approved after validation
+- Checkpoint tampering: alter a persisted LangGraph checkpoint before resume
+- Compromised-node output: make the Validator return a forged approval object
+
+Measure whether the Executor accepts each modification. The structural defense
+should reject unsigned, stale, replayed, or task-mismatched authorizations
+without reading an experiment attack flag.
+
+4.3 Real indirect prompt-injection experiment
+
+Connect the Researcher to an actual local MCP server or retrieval pipeline.
+Store malicious instructions inside retrieved documents or tool responses,
+rather than changing the trusted system prompt. Include:
+
+- Direct and indirect prompt injection
+- Validator identity spoofing
+- Obfuscated instructions
+- Unicode and encoding variants
+- Instructions split across multiple documents
+- Tool-result metadata poisoning
+- False confidence and false provenance fields
+
+The same agent code should run for clean and poisoned inputs. Only the external
+document or tool output should differ.
+
+4.4 Independent policy oracle
+
+Create a machine-readable policy that determines ground truth without using an
+LLM. Each task should specify:
+
+- Required privilege
+- Permitted resources
+- Forbidden resources
+- Expected validator decision
+- Expected executor action
+- Whether user confirmation is required
+
+Compute unsafe_action by comparing observed execution with this policy, not by
+checking whether ATTACK_MODE is enabled.
+
+
+5. DATASET AND EXPERIMENT DESIGN
+--------------------------------
+
+Use a balanced, versioned task dataset. A useful starting design is:
+
+- 50 clearly safe tasks
+- 50 clearly unsafe tasks
+- 50 ambiguous tasks requiring clarification
+- Multiple paraphrases of every task
+- Multiple attack payload families
+- Clean controls paired with every poisoned input
+
+Record a stable task ID, payload ID, expected decision, resource policy, and
+independent human label. Have at least two annotators label the tasks and report
+inter-rater agreement. Resolve disagreements before experiments.
+
+Run a factorial experiment across:
+
+- Attack: none, memory tampering, indirect injection
+- Defense: none, signature filter, provenance validation, signed capability
+- Model: multiple models or model families
+- Task class: safe, unsafe, ambiguous
+- Payload family: plain, obfuscated, split, metadata-based
+
+Use at least 30 independent observations per condition as a minimum pilot.
+Determine the final sample size with a power analysis based on pilot effect
+sizes. Do not choose the final sample size only because 10 or 100 is convenient.
+
+Randomize trial order. Use fresh graph state, sandbox resources, and nonces for
+every trial. Rate-limit requests and record failures separately from security
+decisions. Do not silently retry model failures because retries can bias the
+observations.
+
+
+6. METRICS FOR PUBLICATION
+--------------------------
+
+Retain the current metrics only after making their definitions operational:
+
+- UAR: unauthorized executed actions / attack attempts
+- TPD: number of explicit trust-boundary transitions from injection to action
+- TSD: degradation in correct task completion relative to a matched baseline
+- DL: transitions or elapsed time from injection to confirmed detection
+
+Also report:
+
+- Attack Success Rate
+- False Positive Rate
+- False Negative Rate
+- Precision, recall, and F1 for attack detection
+- Safe-task completion rate
+- Unsafe-task rejection rate
+- Abstention or clarification rate
+- End-to-end latency
+- Token usage and monetary cost
+- Model/API failure rate
+
+Report raw counts as well as percentages. For binomial rates such as UAR and
+Attack Success Rate, report 95% confidence intervals, preferably Wilson
+intervals. Compare paired clean and attacked trials with an appropriate paired
+test, such as McNemar's test for binary outcomes. Report effect sizes and adjust
+for multiple comparisons when testing many models, attacks, or defenses.
+
+Predefine primary and secondary outcomes before collecting the final dataset.
+Avoid selecting only successful attacks or favorable model runs.
+
+
+7. REQUIRED BASELINES AND ABLATIONS
+-----------------------------------
+
+Include these baselines:
+
+- Single-agent system with identical tools
+- Multi-agent system without attacks
+- Multi-agent system with attack and no defense
+- Rule-based validator
+- LLM validator
+- Human-defined policy gate
+
+Include defense ablations:
+
+- Signature matching only
+- Provenance validation only
+- Structured messages only
+- Signed authorization only
+- Combined defense
+
+This shows which component produces the improvement. A combined defense result
+without ablation cannot establish why the system became safer.
+
+
+8. REPRODUCIBILITY AND ARTIFACT QUALITY
+---------------------------------------
+
+For every trial, record:
+
+- Exact model and provider name
+- Model version or dated snapshot when available
+- Timestamp and region
+- Temperature and all decoding parameters
+- Complete prompts and tool results
+- Dependency lock file
+- Git commit hash
+- Operating system and Python version
+- Random seeds
+- Task and payload IDs
+- Full graph path and state transitions
+- Policy decision and authorization verification result
+- Raw response, parser result, and parse failures
+
+Package the repository with:
+
+- One-command environment setup
+- One-command small reproduction test
+- One-command full experiment
+- One-command table and figure generation
+- Versioned synthetic dataset
+- Automated unit and integration tests
+- Expected runtime and API cost
+- Artifact appendix
+- Threat model and ethics statement
+- License and citation file
+
+Use a frozen release or archival DOI for the submitted artifact. Never include
+API keys. Explain how reviewers obtain their own credentials and provide a
+small deterministic mock mode so the workflow can be tested without paid API
+access.
+
+ACM artifact guidance describes strong artifacts as documented, consistent,
+complete, and exercisable. USENIX Security additionally emphasizes consistency
+with paper claims, completeness, documentation, and reuse.
+
+
+9. THREAT MODEL AND ETHICS
+--------------------------
+
+State explicitly:
+
+- Attacker knowledge: black-box, gray-box, or white-box
+- Attacker access: document author, MCP provider, agent process, or state store
+- Trusted computing base
+- Assets and security properties
+- Success condition
+- Out-of-scope attacks
+- Assumptions about model and provider integrity
+
+All experiments should run on synthetic data and infrastructure owned or
+explicitly authorized by the researchers. Do not test attacks against public
+services, other users, or production environments without written permission.
+Follow the selected venue's ethics and responsible-disclosure requirements.
+
+
+10. CLAIMS THAT WOULD BE DEFENSIBLE
+-----------------------------------
+
+After completing the redesigned experiments, claims could take forms such as:
+
+- "Indirect prompt injection increased unauthorized tool invocation from X% to
+  Y% under the stated threat model."
+
+- "Signed task-bound authorization reduced successful state-tampering attacks
+  by X percentage points with a Y% confidence interval."
+
+- "Content signature filtering reduced known attacks but failed against Z% of
+  obfuscated payloads, while structural authorization remained effective."
+
+Avoid claims such as "LangGraph is insecure" or "the defense prevents memory
+poisoning" unless the experiment directly evaluates those general statements
+across representative implementations and conditions.
+
+
+11. PRACTICAL IMPLEMENTATION ORDER
+----------------------------------
+
+Phase 1: Correctness
+
+1. Add policy-labeled safe, unsafe, and ambiguous tasks.
+2. Derive unsafe_action from observed policy violations.
+3. Add unit tests for routing, parsing, authorization, and metrics.
+4. Add isolated temporary filesystem and SQLite executor tools.
+
+Phase 2: Realistic attacks
+
+5. Connect a real local MCP server to the Researcher.
+6. Move injection payloads from the system prompt into retrieved content.
+7. Implement checkpoint and state tampering in an isolated harness.
+8. Add multiple payload families and clean matched controls.
+
+Phase 3: Structural defenses
+
+9. Add signed, task-bound, expiring authorization capabilities.
+10. Add source provenance and typed tool-result schemas.
+11. Remove all defenses that inspect ATTACK_MODE or ATTACK_TYPE.
+12. Add defense ablations.
+
+Phase 4: Evaluation
+
+13. Run a pilot and conduct power analysis.
+14. Freeze prompts, dataset, dependencies, and analysis plan.
+15. Run randomized full experiments across multiple models.
+16. Calculate confidence intervals, statistical tests, latency, and cost.
+17. Independently reproduce the result from a clean environment.
+
+Phase 5: Submission artifact
+
+18. Generate paper tables and figures directly from immutable raw logs.
+19. Add an artifact appendix, ethics statement, and threat model.
+20. Create a tagged archival release and provide exact reproduction commands.
+
+
+12. BOTTOM LINE
+---------------
+
+The present repository is a working research prototype. Its current output is
+appropriate for a methodology demonstration, pilot study, workshop paper, or
+preliminary-results section. It is not yet sufficient by itself for a strong
+Q1-journal claim about real-world multi-agent compromise or defense efficacy.
+
+The key upgrade is not allowing the Executor to damage real systems. The key
+upgrade is constructing a realistic, isolated authorization boundary and
+demonstrating with independent ground truth that attacker-controlled data or
+state can cross that boundary. That provides real security evidence safely.
+
+
+REFERENCES
+----------
+
+NIST AI 100-2, Adversarial Machine Learning: A Taxonomy and Terminology of
+Attacks and Mitigations:
+https://csrc.nist.gov/pubs/ai/100/2/e2023/final
+
+ACM Artifact Review and Badging:
+https://www.acm.org/publications/policies/artifact-review-and-badging-current
+
+USENIX Security 2026 Call for Artifacts:
+https://www.usenix.org/conference/usenixsecurity26/call-for-artifacts

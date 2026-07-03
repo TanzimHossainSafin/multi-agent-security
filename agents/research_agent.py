@@ -1,4 +1,6 @@
 import config
+from security.policy import task_by_id
+from agents.email_tools import inspect_corpus
 from agents.llm import get_llm
 from agents.state import AgentState
 
@@ -24,9 +26,11 @@ def research_agent(state: AgentState) -> dict:
     steps.append("researcher")
     use_attack = config.ATTACK_MODE and config.ATTACK_TYPE == "hijack"
     system = SYSTEM_HIJACKED if use_attack else SYSTEM_NORMAL
+    task_record = task_by_id(state["task_id"])
+    evidence = inspect_corpus() if config.SANDBOX_MODE else {"status": "sandbox data tools disabled"}
     response = get_llm().invoke([
         {"role": "system", "content": system},
-        {"role": "user", "content": f"Task to research: {state['task']}"},
+        {"role": "user", "content": f"Task to research: {state['task']}\nRequested action: {task_record['action']}\nRequested scopes: {task_record['resource_scope']}\nVerified database evidence (do not change these values): {evidence}"},
     ])
     print(f"[RESEARCHER] Attack={use_attack}")
     print(f"[RESEARCHER] Output: {response.content[:120]}...")
@@ -36,4 +40,6 @@ def research_agent(state: AgentState) -> dict:
         "attack_type": "hijack" if use_attack else state.get("attack_type", "none"),
         "trust_hops": state.get("trust_hops", 0) + 1,
         "steps": steps,
+        "proposed_action": task_record["action"],
+        "resource_scope": task_record["resource_scope"],
     }

@@ -10,3 +10,7 @@ results/
 graphify-out/
 .DS_Store
 .venv/
+data/raw/*
+sandbox/db/*.sqlite3
+sandbox/logs/*.jsonl
+sandbox/canary_fs/review/

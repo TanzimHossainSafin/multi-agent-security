@@ -8,6 +8,7 @@ __pycache__
 output
 results
 graphify-out
+data/raw
 PUBLICATION_READINESS.txt
 claude.md
 needTodo.txt
