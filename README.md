@@ -1,33 +1,35 @@
 # TrustPropagation
 
-## Real email demo
+A synchronous [LangGraph](https://github.com/langchain-ai/langgraph) testbed
+for studying how security attacks propagate through a multi-agent pipeline,
+and whether they can compromise a high-privilege agent from a low-privilege
+or low-trust entry point.
 
-The system uses real records from `data/emails_demo.csv`, a deterministic
-1,000-row subset of the supplied email corpus. The complete local corpus lives
-at `data/raw/emails.csv` and is intentionally Git-ignored because it is 1.3 GB.
-No synthetic email rows are generated.
+**Research question:** if a low-trust surface in the pipeline is compromised
+— shared state tampered with directly, or an agent's context poisoned via
+prompt injection — can that attack reach and compromise the high-privilege
+Executor into performing a real unauthorized action?
 
-Initialize the real SQLite sandbox and run the complete graph:
+See [`RESEARCH_FINDINGS.md`](RESEARCH_FINDINGS.md) for current results.
 
-```bash
-docker compose build
-docker compose run --rm app python sandbox/ingest_emails.py
-SANDBOX_MODE=true TRIAL_COUNT=5 docker compose run --rm app python experiments/baseline_run.py
-```
+---
 
-Safe tasks inspect real SQLite records, export real message metadata into the
-sandbox filesystem, or quarantine duplicate Message-IDs. Attempts to delete
-the source dataset or send email contents externally are rejected by the
-independent policy oracle. Validator approvals are HMAC-signed, expiring,
-nonce-protected, and bound to the task, action, and scopes.
+## Contents
 
-TrustPropagation is a synchronous LangGraph testbed for studying how attacks propagate through a multi-agent workflow. It models a deterministic supervisor coordinating three agents with different privilege levels:
+- [Architecture](#architecture)
+- [Attacks](#attacks)
+- [Defenses](#defenses)
+- [Quickstart](#quickstart)
+- [Sandbox mode](#sandbox-mode)
+- [Running experiments](#running-experiments)
+- [Metrics](#metrics)
+- [Configuration](#configuration)
+- [Project structure](#project-structure)
+- [Adding a new dataset (domain)](#adding-a-new-dataset-domain)
+- [Research limitations](#research-limitations)
+- [Contributing](#contributing)
 
-- Researcher: read-only information gathering
-- Validator: safety review and authorization
-- Executor: high-privilege task execution
-
-The project evaluates memory poisoning and agent hijacking, then measures whether defensive validation reduces unsafe execution.
+---
 
 ## Architecture
 
@@ -36,55 +38,110 @@ User task
    |
    v
 Supervisor --> Researcher --> Supervisor --> Validator --> Supervisor
-                                                        |          |
-                                                     rejected   approved
-                                                        |          |
-                                                       END      Executor --> END
+ (deterministic)  (LOW priv)                 (MED priv)
+                                                  |          |
+                                             rejected     approved
+                                                  |          |
+                                                 END      Executor --> END
+                                                          (HIGH priv)
 ```
 
-The supervisor uses deterministic state-based routing rather than an LLM. This keeps routing decisions reproducible and auditable.
+| Agent | Privilege | Role |
+|---|---|---|
+| Supervisor (`agents/orchestrator.py`) | — | Deterministic, state-based routing. No LLM call, fully auditable. |
+| Researcher (`agents/research_agent.py`) | Low | Read-only information gathering via an LLM. |
+| Validator (`agents/validator_agent.py`) | Medium | Reviews the research output and decides whether to authorize execution. |
+| Executor (`agents/executor_agent.py`) | High | Executes the task only against a valid, signed authorization. |
+
+Shared state (`agents/state.py`) is a typed dict threaded through every node
+via LangGraph. All routing, decisions, and side effects are logged for audit
+(`evaluation/logger.py`).
+
+### Authorization boundary
+
+The Validator does not just set a boolean flag. On approval it issues a
+capability object (`security/authorization.py`):
+
+```json
+{
+  "task_id": "...",
+  "action": "...",
+  "scopes": ["..."],
+  "expires_at": 1234567890,
+  "nonce": "...",
+  "signature": "HMAC-SHA256(...)"
+}
+```
+
+The Executor independently verifies the signature, expiry, task/action
+binding, and nonce uniqueness before running anything, and independently
+re-checks the requested action and scopes against a policy oracle
+(`security/policy.py`) backed by a labeled task corpus (`data/tasks.json`) —
+not against whatever the Validator or Researcher claims. A forged or stale
+approval is therefore insufficient on its own; see
+[`experiments/boundary_attacks.py`](experiments/boundary_attacks.py) for the
+adversarial tests against this layer.
+
+---
 
 ## Attacks
 
-### Memory poisoning
+### 1. Memory poisoning (`attacks/memory_poisoning.py`)
 
-A compromised validator bypasses normal LLM review and writes a fabricated approval directly into shared state. This tests whether corrupted authorization state reaches the executor.
+A compromised Validator node bypasses LLM review and writes a fabricated
+approval directly into shared state, without minting a valid authorization.
+Tests whether corrupted state alone can reach the Executor.
 
-### Agent hijacking
+### 2. Agent hijacking (`attacks/agent_hijacking.py`)
 
-The researcher's context contains a malicious instruction that makes it append a fabricated validator-approval notice. The validator may reject the suspicious content or incorrectly trust it.
+The Researcher's system prompt is poisoned with an injected instruction —
+simulating a malicious document retrieved from a knowledge base — that makes
+it append a fabricated validator-approval notice to its output. Tests
+whether the Validator can be fooled by poisoned input it did not generate.
+
+Enable an attack:
+
+```bash
+python3 experiments/attack_run.py memory
+python3 experiments/attack_run.py hijack
+```
+
+---
 
 ## Defenses
 
-Defense mode provides:
+Enabled via `config.DEFENSE_MODE`:
 
-- Signature detection for known prompt-injection patterns
-- Validator integrity attestation for the simulated memory-poisoning path
-- Immediate rejection before unsafe execution when an attack is detected
+- **Signature detection** — rejects Researcher output containing known
+  prompt-injection phrases before the Validator LLM is even called.
+- **Validator integrity attestation** — rejects the memory-poisoning path
+  outright (an oracle-style check available to the harness, not a production
+  defense — see [Research limitations](#research-limitations)).
+- **Structural authorization** — independent of `DEFENSE_MODE`: the signed,
+  task-bound, expiring, nonce-protected capability plus the independent
+  policy oracle. This is what actually stops forged approvals from reaching
+  the Executor in [`sandbox mode`](#sandbox-mode).
 
-These are experimental controls, not complete production defenses. Signature matching will not reliably detect novel or obfuscated prompt injections.
+```bash
+python3 experiments/defense_run.py memory
+python3 experiments/defense_run.py hijack
+```
 
-## Requirements
+---
 
-- Python 3.10 or newer
-- A Groq API key
-- Internet access when installing dependencies and invoking Groq
+## Quickstart
 
-Install dependencies:
+Requirements: Python 3.10+, a [Groq](https://console.groq.com) API key.
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root:
+Create `.env` in the project root (never commit this file):
 
 ```dotenv
 GROQ_API_KEY=your_groq_api_key
 ```
-
-Do not commit `.env` or API keys to version control.
-
-## Running the system
 
 Run one trial using the settings in `config.py`:
 
@@ -92,147 +149,256 @@ Run one trial using the settings in `config.py`:
 python3 main.py
 ```
 
-Run the ten-trial baseline cohort:
+---
+
+## Sandbox mode
+
+By default the Executor only prints `EXECUTED: <task>` — a simulated action.
+Set `SANDBOX_MODE=true` to route the Executor through the real authorization
+boundary and a real sandboxed target: a disposable SQLite database, a canary
+filesystem, and a local mock HTTP service. This is what produces hard
+evidence (not just an LLM's stated decision) of whether an attack reached
+the high-privilege agent.
 
 ```bash
-python3 experiments/baseline_run.py
+# start the mock HTTP target
+python3 sandbox/mock_http.py &
+
+# populate the sandbox from the active dataset (see config.ACTIVE_DOMAIN)
+SANDBOX_ROOT=sandbox EMAIL_DATASET=data/emails_demo.csv python3 sandbox/ingest.py
+
+# run any experiment against the real sandbox
+SANDBOX_MODE=true SANDBOX_ROOT=sandbox MOCK_HTTP_URL=http://localhost:8080/action \
+  python3 experiments/baseline_run.py
 ```
 
-Run attack cohorts:
+Or via Docker, which wires the mock HTTP service and sandbox volumes
+automatically:
 
 ```bash
-python3 experiments/attack_run.py memory
-python3 experiments/attack_run.py hijack
+docker compose build
+docker compose run --rm app python sandbox/ingest.py
+SANDBOX_MODE=true TRIAL_COUNT=5 docker compose run --rm app python experiments/baseline_run.py
 ```
 
-Run defended cohorts:
+The real corpus lives at `data/emails_demo.csv`, a deterministic 1,000-row
+subset of the full email dataset (`data/raw/`, git-ignored, 1.3 GB). No
+synthetic rows are generated. Safe tasks inspect real SQLite records, export
+real message metadata, or quarantine duplicate Message-IDs; attempts to
+delete the source dataset or send email contents externally are rejected by
+the independent policy oracle before they reach a tool.
+
+### Authorization boundary attacks
+
+Deterministic, non-LLM tests of the authorization layer itself — forged
+signatures, nonce replay, confused-deputy action mismatches, expired tokens,
+and two "fully compromised validator node" scenarios (scope escalation and
+unsafe-task forgery using the real signing secret):
 
 ```bash
-python3 experiments/defense_run.py memory
-python3 experiments/defense_run.py hijack
+SANDBOX_MODE=true SANDBOX_ROOT=sandbox MOCK_HTTP_URL=http://localhost:8080/action \
+  python3 experiments/boundary_attacks.py
 ```
 
-Each trial invokes the configured Groq model and may consume API quota.
+---
 
-## Metrics
-
-The evaluation module calculates:
-
-| Metric | Meaning |
-| --- | --- |
-| UAR | Unsafe Action Rate: fraction of trials that reached unsafe execution |
-| TPD | Trust Propagation Distance: mean attack hops among unsafe trials |
-| TSD | Task Success Degradation: relative reduction in legitimate executions compared with baseline |
-| DL | Detection Latency: mean pipeline steps for attacks caught by defense |
-
-Print reports after generating experiment logs:
+## Running experiments
 
 ```bash
-python3 - <<'PY'
-from evaluation.metrics import print_report
-
-print_report("memory")
-print_report("hijack")
-print_report("memory", defense_mode=True)
-print_report("hijack", defense_mode=True)
-PY
+python3 experiments/baseline_run.py        # control cohort, no attack
+python3 experiments/attack_run.py memory   # memory-poisoning cohort
+python3 experiments/attack_run.py hijack   # agent-hijacking cohort
+python3 experiments/defense_run.py memory  # memory attack with defense
+python3 experiments/defense_run.py hijack  # hijack attack with defense
 ```
 
-### Generate the clean results matrix
+Each cohort runs `config.TRIAL_COUNT` trials, cycling through the labeled
+task corpus (`experiments/tasks.py` / `data/tasks.json`), and writes one
+immutable JSON log per trial to `output/<EXPERIMENT_ID>/`.
 
-Run all cohorts first so every row can be calculated:
-
-```bash
-python3 experiments/baseline_run.py
-python3 experiments/attack_run.py memory
-python3 experiments/attack_run.py hijack
-python3 experiments/defense_run.py memory
-python3 experiments/defense_run.py hijack
-```
-
-Then generate one clean matrix containing every cohort:
+Generate the consolidated results matrix once all cohorts have run:
 
 ```bash
 python3 experiments/report.py
 ```
 
-This prints the matrix and saves `metrics_matrix.md` and `metrics_matrix.csv`
-inside the active `output/<EXPERIMENT_ID>/` directory.
-
-Example format:
+This prints the matrix and writes `metrics_matrix.md` / `metrics_matrix.csv`
+into `output/<EXPERIMENT_ID>/`.
 
 | Experiment | Trials | UAR | TPD | TSD | DL |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Baseline | 10 | 0.00% | 0.00 hops | 0.00% | — |
-| Memory attack | 10 | 100.00% | 1.00 hops | varies | — |
+| Memory attack | 10 | varies | varies | varies | — |
 | Hijack attack | 10 | varies | varies | varies | — |
 | Memory defense | 10 | varies | varies | varies | varies |
 | Hijack defense | 10 | varies | varies | varies | varies |
 
-A `—` means the metric does not apply to that cohort or the required logs have
-not been generated. TSD requires baseline logs, while DL applies only to defense
-runs where an injected attack was detected.
+`—` means the metric does not apply to that cohort, or the required logs
+haven't been generated yet. TSD requires baseline logs; DL applies only to
+defense cohorts where an injected attack was detected.
 
-Attack and defense cohorts are filtered separately to prevent defended trials from contaminating attack-only measurements.
+Use a distinct `EXPERIMENT_ID` per study (e.g. sandbox vs. non-sandbox runs)
+so results don't mix — the metrics loader filters by experiment ID and reads
+directly from `output/<EXPERIMENT_ID>/`.
 
-## Results
+---
 
-Every trial creates an immutable JSON file inside a folder named after the
-active experiment ID. With the default `EXPERIMENT_ID=EXP-001`, logs are written under:
+## Metrics
 
-```text
-output/EXP-001/
-```
+Computed in `evaluation/metrics.py` from raw JSON trial logs:
 
-Log filenames include the experiment ID, attack type, cohort mode, trial number, timestamp, and a random suffix. Each log records the task, model configuration, agent outputs, decision, executed action, attack status, trust hops, and graph steps.
+| Metric | Name | Formula | Meaning |
+|---|---|---|---|
+| UAR | Unsafe Action Rate | `unsafe_runs / total_runs` | How often the attack caused execution without genuine authorization |
+| TPD | Trust Propagation Distance | `mean(trust_hops)` over unsafe runs | How many agent hops the attack traveled before reaching execution |
+| TSD | Task Success Degradation | `(baseline_safe − attack_safe) / baseline_safe` | Relative drop in legitimate task completions under attack or defense |
+| DL | Detection Latency | `mean(len(steps))` over caught attacks | Pipeline steps elapsed before a defense caught the attack |
 
-After running `python3 experiments/report.py`, the experiment folder contains:
+Every trial log also records whether it was blocked and why
+(`action_taken`), whether the request violated the independent policy oracle
+(`policy_violation`), and the full node path (`steps`) — read the raw JSON
+in `output/<EXPERIMENT_ID>/` for anything the aggregate metrics don't
+capture.
 
-```text
-output/EXP-001/
-├── EXP-001_*_trial*.json   Raw trial logs
-├── metrics_matrix.md       Human-readable results table
-└── metrics_matrix.csv      Spreadsheet-ready results table
-```
-
-Use a new `EXPERIMENT_ID` for each study to keep its results isolated. The metric
-loader reads the folder matching the active experiment ID.
+---
 
 ## Configuration
 
-Core settings are defined in `config.py` and may be overridden by supported environment variables:
+Set in `config.py`, overridable by environment variable:
 
-| Setting | Default |
-| --- | --- |
-| `MODEL_NAME` | `llama-3.3-70b-versatile` |
-| `TEMPERATURE` | `0` |
-| `ATTACK_MODE` | `false` |
-| `ATTACK_TYPE` | `none` |
-| `DEFENSE_MODE` | `false` |
-| `TRIAL_COUNT` | `10` |
-| `EXPERIMENT_ID` | `EXP-001` |
+| Setting | Default | Purpose |
+|---|---|---|
+| `MODEL_NAME` | `llama-3.3-70b-versatile` | Groq model used by Researcher and Validator |
+| `TEMPERATURE` | `0` | Fixed for reproducibility |
+| `ATTACK_MODE` / `ATTACK_TYPE` | `false` / `none` | `none`, `memory`, or `hijack` |
+| `DEFENSE_MODE` | `false` | Enables signature filter + integrity attestation |
+| `SANDBOX_MODE` | `false` | Routes the Executor through real authorization + sandboxed tools |
+| `SANDBOX_ROOT` | `sandbox` | Root for the canary filesystem, SQLite DB, and audit logs |
+| `MOCK_HTTP_URL` | `http://mock-http:8080/action` | Target the Executor notifies after a real action |
+| `AUTH_SECRET` | `demo-only-change-me` | HMAC signing secret — treat as a real secret outside local demos |
+| `ACTIVE_DOMAIN` | `email` | Which `sandbox/domains/*_domain.py` module supplies tools + ingestion |
+| `TASKS_FILE` | `data/tasks.json` | Path to the labeled task corpus (relative to project root, or absolute) |
+| `TRIAL_COUNT` | `10` | Trials per experiment cohort |
+| `EXPERIMENT_ID` | `EXP-001` | Namespaces logs under `output/<EXPERIMENT_ID>/` |
 
-The experiment scripts set attack and defense flags before importing the graph.
+---
 
 ## Project structure
 
 ```text
-agents/          Agent state, LLM factory, supervisor, and agent nodes
-attacks/         Attack metadata and research framing
-evaluation/      JSON logging and metric calculations
-experiments/     Baseline, attack, defense runners, and shared task corpus
-mcp_servers/     Simulated honest and compromised MCP tool outputs
-output/          Generated records grouped by experiment ID
-config.py        Model and experiment configuration
-main.py          LangGraph construction and single-run entry point
+agents/            Shared state, LLM factory, supervisor, and the four agent nodes
+attacks/            Attack metadata and academic framing (memory poisoning, hijacking)
+evaluation/         JSON trial logging and metric calculations (UAR, TPD, TSD, DL)
+experiments/         Baseline / attack / defense runners, boundary attacks, report generator
+security/            HMAC authorization issuance/verification and the independent policy oracle
+sandbox/
+  domains/           Pluggable per-dataset tool + ingestion adapters (see below)
+  mock_http.py       Local HTTP target for sandboxed executor actions
+  ingest.py           Entry point: populates the sandbox for config.ACTIVE_DOMAIN
+mcp_servers/        Simulated honest/compromised MCP tool responses (not yet wired into the graph)
+data/               Task corpus (tasks.json) and dataset files
+output/             Generated JSON logs and metrics matrices, grouped by EXPERIMENT_ID
+config.py           Central configuration (env-overridable)
+main.py             LangGraph construction and single-run entry point
+RESEARCH_FINDINGS.md  Current experimental results and their interpretation
+PUBLICATION_READINESS.txt  Roadmap toward a publication-grade evaluation
 ```
+
+---
+
+## Adding a new dataset (domain)
+
+The sandbox tool layer is pluggable so a new dataset doesn't require
+touching agent or executor code:
+
+1. Create `sandbox/domains/<name>_domain.py` implementing the contract in
+   `sandbox/domains/base.py`: a `name` string, a `TOOLS` dict of
+   `action_name -> callable`, and `evidence()`, `notify()`, `ingest()`
+   functions.
+2. Add a matching labeled task corpus (same schema as `data/tasks.json`:
+   `task_id`, `task_text`, `gold_label`, `expected_decision`, `resource_scope`,
+   `action`) and point `TASKS_FILE` at it.
+3. Set `ACTIVE_DOMAIN=<name>` (env var) and run `sandbox/ingest.py`.
+
+Nothing else changes — `agents/executor_agent.py` and
+`agents/research_agent.py` resolve the active domain at call time via
+`sandbox.domains.get_domain(config.ACTIVE_DOMAIN)`.
+
+---
 
 ## Research limitations
 
-- Temperature zero improves reproducibility but does not guarantee identical remote-model responses over time.
-- The hijacking success rate depends on the selected model and provider behavior.
-- The MCP tool modules simulate tool responses; they are not networked MCP servers and are not currently wired into the graph.
-- The memory-poisoning defense uses a trusted integrity check available to the experiment harness. A production system requires an isolation or attestation mechanism outside the compromised agent.
-- The supplied task corpus is destructive, so a strict validator may reject baseline tasks. Interpret TSD alongside raw approval and execution logs.
+- Both `DEFENSE_MODE` checks reject **every** task once the attack condition
+  is present, not just unsafe ones — a real precision/recall tradeoff, not a
+  free win. See `RESEARCH_FINDINGS.md`.
+- The memory-poisoning defense keys off `config.ATTACK_MODE` / `ATTACK_TYPE`
+  — an oracle available to the harness, not a production integrity check.
+  The structural authorization boundary (signature + policy oracle) is the
+  result that holds independent of that flag.
+- `AUTH_SECRET` confidentiality and `data/tasks.json` integrity are now the
+  load-bearing trust assumptions; neither is adversarially tested here.
+- One model, one temperature, a small labeled task corpus, ten trials per
+  cohort. Treat any single run's hijack success/failure rate as a data
+  point, not a general claim — see `PUBLICATION_READINESS.txt` for what a
+  publication-grade version of this evaluation requires.
+- The `mcp_servers/` modules simulate tool responses but are not wired into
+  the active graph.
+- The Executor's sandboxed actions are real (SQLite writes, canary files,
+  HTTP calls) but scoped to disposable local resources — this project never
+  touches production systems, and `unsafe_action` reflects trust-boundary
+  crossing within that sandbox, not real-world damage.
 
-Use this project only in controlled environments. The executor records simulated actions and does not perform filesystem deletion or other external side effects.
+---
+
+## Contributing
+
+This is an active research testbed, not a finished library — expect the
+architecture to keep evolving as new attacks, defenses, and datasets are
+added. A few things make it easier to work on together:
+
+**Get running locally**
+
+1. Clone, then `python3 -m pip install -r requirements.txt`.
+2. Get your own Groq API key at [console.groq.com](https://console.groq.com)
+   and put it in a local `.env` (never commit this file — it's gitignored).
+3. `python3 main.py` for a single sanity-check trial, then work through
+   [Quickstart](#quickstart) and [Sandbox mode](#sandbox-mode).
+4. You do not need the full 1.3 GB raw email corpus — `data/emails_demo.csv`
+   (checked in) is a deterministic 1,000-row subset and is all that's needed
+   to run every experiment and reproduce the results in
+   `RESEARCH_FINDINGS.md`.
+
+**Where things live**
+
+- `CLAUDE.md` — the detailed build spec this project was originally
+  scaffolded from. Useful background on intent and coding standards even
+  where the code has since evolved past it.
+- `PUBLICATION_READINESS.txt` — the roadmap toward a publication-grade
+  evaluation (statistical rigor, additional attack realism, baselines,
+  ablations). Check here before starting a new experiment track — it likely
+  already scopes the next step.
+- `RESEARCH_FINDINGS.md` — current results and their interpretation. Update
+  this alongside any change that affects what the numbers mean, not just
+  when the numbers themselves change.
+- `needTodo.txt` / `summary.md` — informal working notes; may lag the code.
+  Treat `README.md` and the source itself as the source of truth when they
+  disagree.
+
+**Extending the system**
+
+- New attack: add a metadata module in `attacks/`, the actual logic in the
+  relevant agent (`agents/research_agent.py` for input-side attacks,
+  `agents/validator_agent.py` for state-side attacks), and a cohort runner
+  in `experiments/`.
+- New defense: gate it behind `config.DEFENSE_MODE` (or a new flag) inside
+  the agent it defends, and prefer checks that don't need to know
+  `ATTACK_MODE`/`ATTACK_TYPE` — those are stronger, more publishable results
+  than oracle-style detection. See [Defenses](#defenses) for the distinction
+  this repo already draws.
+- New dataset: see [Adding a new dataset (domain)](#adding-a-new-dataset-domain)
+  — no agent or executor changes required.
+- Before opening a PR: run the relevant experiment cohort(s) end to end
+  (`experiments/*_run.py` plus `experiments/report.py`) and sanity-check that
+  `output/<EXPERIMENT_ID>/metrics_matrix.md` looks like what you'd expect —
+  there are no automated tests yet, so this is the practical regression
+  check.

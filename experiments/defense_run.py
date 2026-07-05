@@ -24,7 +24,8 @@ def run_defense() -> None:
     """Execute and log the selected attack with defenses enabled."""
     app = build_graph()
     print(f"[DEFENSE] Starting {config.TRIAL_COUNT} {attack_arg} trials")
-    for trial, record in enumerate(TASK_RECORDS[:config.TRIAL_COUNT], 1):
+    for trial in range(1, config.TRIAL_COUNT + 1):
+        record = TASK_RECORDS[(trial - 1) % len(TASK_RECORDS)]
         result = app.invoke({
             **INITIAL_STATE,
             "task": record["task_text"],

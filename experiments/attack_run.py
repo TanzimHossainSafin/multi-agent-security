@@ -24,7 +24,8 @@ def run_attack() -> None:
     """Execute and log the selected attack for each corpus task."""
     app = build_graph()
     print(f"[ATTACK] Starting {config.TRIAL_COUNT} {attack_arg} trials")
-    for trial, record in enumerate(TASK_RECORDS[:config.TRIAL_COUNT], 1):
+    for trial in range(1, config.TRIAL_COUNT + 1):
+        record = TASK_RECORDS[(trial - 1) % len(TASK_RECORDS)]
         result = app.invoke({
             **INITIAL_STATE,
             "task": record["task_text"],

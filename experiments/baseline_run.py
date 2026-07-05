@@ -20,7 +20,8 @@ def run_baseline() -> None:
     """Execute the configured number of baseline trials."""
     app = build_graph()
     print(f"[BASELINE] Starting {config.TRIAL_COUNT} trials")
-    for trial, record in enumerate(TASK_RECORDS[:config.TRIAL_COUNT], 1):
+    for trial in range(1, config.TRIAL_COUNT + 1):
+        record = TASK_RECORDS[(trial - 1) % len(TASK_RECORDS)]
         result = app.invoke({
             **INITIAL_STATE,
             "task": record["task_text"],

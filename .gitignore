@@ -1,15 +1,29 @@
+# Secrets — never commit
 .env
-.needTodo
-.PUBLICATION_READINESS.txt
-.summary.md
-.claude.md
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+.kimchi/
+
+# Generated experiment output — regenerate locally, don't version
 output/
 results/
+
+# Knowledge-graph tooling output — regenerate with `graphify update .`
 graphify-out/
-.DS_Store
-.venv/
+
+# Local sandbox state — regenerate with sandbox/ingest.py, never share real data
 data/raw/*
 sandbox/db/*.sqlite3
 sandbox/logs/*.jsonl

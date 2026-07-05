@@ -27,6 +27,8 @@ SANDBOX_MODE = os.getenv("SANDBOX_MODE", "false").strip().lower() in {"1", "true
 SANDBOX_ROOT = Path(os.getenv("SANDBOX_ROOT", "sandbox"))
 MOCK_HTTP_URL = os.getenv("MOCK_HTTP_URL", "http://mock-http:8080/action")
 AUTH_SECRET = os.getenv("AUTH_SECRET", "demo-only-change-me")
+ACTIVE_DOMAIN = os.getenv("ACTIVE_DOMAIN", "email")
+TASKS_FILE = Path(os.getenv("TASKS_FILE", "data/tasks.json"))
 
 
 def ensure_log_dir() -> None:

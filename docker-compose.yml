@@ -12,6 +12,8 @@ services:
       SANDBOX_MODE: ${SANDBOX_MODE:-false}
       SANDBOX_ROOT: /app/sandbox
       MOCK_HTTP_URL: http://mock-http:8080/action
+      ACTIVE_DOMAIN: ${ACTIVE_DOMAIN:-email}
+      TASKS_FILE: ${TASKS_FILE:-data/tasks.json}
       EMAIL_DATASET: /app/data/emails_demo.csv
       AUTH_SECRET: ${AUTH_SECRET:-demo-only-change-me}
     volumes:
