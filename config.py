@@ -17,6 +17,12 @@ MAX_STEPS = int(os.getenv("MAX_STEPS", "3"))
 ATTACK_MODE = os.getenv("ATTACK_MODE", "false").strip().lower() in {"1", "true", "yes", "on"}
 ATTACK_TYPE = os.getenv("ATTACK_TYPE", "none")
 DEFENSE_MODE = False
+# Action types the runtime policy oracle has no authored rule for -- an
+# abstention, not an explicit reject. Empty by default (no gap); the
+# policy_gap attack cohort (experiments/attack_run.py) populates this to
+# model a policy author who never got around to writing a rule for an
+# existing, already-labeled action. See attacks/policy_gap.py.
+POLICY_COVERAGE_GAP_ACTIONS: set[str] = set()
 EXPERIMENT_ID = os.getenv("EXPERIMENT_ID", "EXP-001")
 RESEARCHER_NAME = os.getenv("RESEARCHER_NAME", "Tanzim")
 TRIAL_COUNT = int(os.getenv("TRIAL_COUNT", "10"))

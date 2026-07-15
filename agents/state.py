@@ -11,6 +11,8 @@ class AgentState(TypedDict):
     trial_id: int
     proposed_action: str
     resource_scope: list[str]
+    proposed_action_args: dict
+    argument_provenance: dict
     authorization: dict
     review_challenge: str
     review_attestation: str

@@ -14,7 +14,7 @@ class Domain(Protocol):
     """Structural contract for a pluggable sandbox domain."""
 
     name: str
-    TOOLS: dict[str, Callable[[], dict]]
+    TOOLS: dict[str, Callable[..., dict]]
 
     def evidence(self) -> dict:
         """Return a factual summary of current sandbox state for the Researcher."""

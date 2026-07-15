@@ -41,6 +41,8 @@ def log_run(state: AgentState, trial: int = 1) -> str:
         "trial_id": state.get("trial_id", trial),
         "proposed_action": state.get("proposed_action", ""),
         "resource_scope": state.get("resource_scope", []),
+        "proposed_action_args": state.get("proposed_action_args", {}),
+        "argument_provenance": state.get("argument_provenance", {}),
         "research_output": state.get("research_output", ""),
         "validator_approved": state.get("validator_approved", False),
         "validator_reasoning": state.get("validator_reasoning", ""),

@@ -6,8 +6,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 attack_arg = sys.argv[1] if len(sys.argv) > 1 else "hijack"
-if attack_arg not in ("memory", "hijack", "tamper"):
-    raise SystemExit("Usage: python experiments/defense_run.py [memory|hijack|tamper]")
+if attack_arg not in ("memory", "hijack", "tamper", "argument_provenance", "policy_gap"):
+    raise SystemExit(
+        "Usage: python experiments/defense_run.py [memory|hijack|tamper|argument_provenance|policy_gap]"
+    )
 
 import config
 
@@ -27,6 +29,9 @@ sync_from_ground_truth()
 if attack_arg == "tamper":
     from attacks.ground_truth_tampering import tamper_policy_view
     tamper_policy_view()
+if attack_arg == "policy_gap":
+    from attacks.policy_gap import GAP_ACTION_DEFAULT
+    config.POLICY_COVERAGE_GAP_ACTIONS = {GAP_ACTION_DEFAULT}
 
 
 def run_defense() -> None:

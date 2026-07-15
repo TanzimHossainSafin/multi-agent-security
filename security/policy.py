@@ -27,6 +27,8 @@ from pathlib import Path
 
 import config
 
+COVERAGE_GAP_PREFIX = "policy coverage gap:"
+
 
 def _resolve(path: Path) -> Path:
     path = Path(path)
@@ -107,7 +109,16 @@ def check(task_id: str, action: str, scopes: list[str]) -> tuple[bool, str]:
     When config.DEFENSE_MODE is on, the specific task record's integrity is
     verified first -- this catches attacks/ground_truth_tampering.py without
     also rejecting every other, untouched task in the same corpus.
+
+    Fails closed (False) on a coverage gap -- config.POLICY_COVERAGE_GAP_ACTIONS
+    marking an action as never-authored -- exactly like every other denial
+    path here. The "policy coverage gap:" reason prefix is what lets a caller
+    distinguish "the oracle abstained" from "the oracle explicitly rejected",
+    which is the distinction attacks/policy_gap.py's fallback-to-Validator
+    defect (modeled in agents/executor_agent.py, not here) depends on.
     """
+    if action in config.POLICY_COVERAGE_GAP_ACTIONS:
+        return False, f"{COVERAGE_GAP_PREFIX} no rule authored for this action"
     task = task_by_id(task_id)
     if task is None:
         return False, "unknown task_id: default deny"

@@ -9,11 +9,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import config
 from evaluation.metrics import (
+    compute_argument_deviation_rate,
     compute_DL,
     compute_execution_rate,
     compute_F1,
     compute_FPR,
     compute_FPR_ci,
+    compute_gap_fallback_rate,
     compute_JBR,
     compute_precision,
     compute_precision_ci,
@@ -55,9 +57,13 @@ def build_matrix() -> list[dict[str, str]]:
         ("Memory attack", "memory", False),
         ("Hijack attack", "hijack", False),
         ("Tamper attack", "tamper", False),
+        ("Argument-provenance attack", "argument_provenance", False),
+        ("Policy-gap attack", "policy_gap", False),
         ("Memory defense", "memory", True),
         ("Hijack defense", "hijack", True),
         ("Tamper defense", "tamper", True),
+        ("Argument-provenance defense", "argument_provenance", True),
+        ("Policy-gap defense", "policy_gap", True),
     ]
     rows: list[dict[str, str]] = []
     for name, attack_type, defense_mode in cohorts:
@@ -97,6 +103,14 @@ def build_matrix() -> list[dict[str, str]]:
                 compute_precision(logs) if has_logs else None, compute_precision_ci(logs) if has_logs else None
             ),
             "F1": "—" if not has_logs else f"{compute_F1(logs):.4f}",
+            "ArgDevRate": (
+                _format_percent(compute_argument_deviation_rate(logs))
+                if has_logs and attack_type == "argument_provenance" else "—"
+            ),
+            "GapFallbackRate": (
+                _format_percent(compute_gap_fallback_rate(logs))
+                if has_logs and attack_type == "policy_gap" else "—"
+            ),
         })
     return rows
 
@@ -111,6 +125,7 @@ def write_report() -> tuple[Path, Path]:
     columns = [
         "Experiment", "Trials", "TP", "FP", "TN", "FN",
         "UAR", "ExecRate", "TPD", "TSD", "DL", "JBR", "FPR", "Recall", "Precision", "F1",
+        "ArgDevRate", "GapFallbackRate",
     ]
 
     markdown_lines = [
