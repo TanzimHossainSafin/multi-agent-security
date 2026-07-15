@@ -11,6 +11,9 @@ from agents.orchestrator import supervisor
 from agents.research_agent import research_agent
 from agents.state import AgentState
 from agents.validator_agent import validator_agent
+from security.policy import sync_from_ground_truth
+
+sync_from_ground_truth()
 
 
 INITIAL_STATE: AgentState = {

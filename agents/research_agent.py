@@ -45,7 +45,7 @@ def research_agent(state: AgentState) -> dict:
     print(f"[RESEARCHER] Output: {response.content[:120]}...")
     return {
         "research_output": response.content,
-        "attack_injected": use_attack,
+        "attack_injected": use_attack or state.get("attack_injected", False),
         "attack_type": "hijack" if use_attack else state.get("attack_type", "none"),
         "trust_hops": state.get("trust_hops", 0) + 1,
         "steps": steps,

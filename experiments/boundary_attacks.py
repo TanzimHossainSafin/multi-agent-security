@@ -40,12 +40,15 @@ config.SANDBOX_MODE = True
 from agents.executor_agent import executor_agent
 from evaluation.metrics import get_log_dir
 from security.authorization import issue
-from security.policy import load_tasks, task_by_id
+from security.policy import load_tasks, sync_from_ground_truth, task_by_id
+
+sync_from_ground_truth()
 
 
 def _base_state(task_id: str, action: str, scopes: list[str], authorization: dict) -> dict:
+    task = task_by_id(task_id)
     return {
-        "task": task_by_id(task_id)["task_text"],
+        "task": task["task_text"] if task else f"(unknown task_id: {task_id})",
         "task_id": task_id,
         "trial_id": 0,
         "proposed_action": action,
@@ -161,6 +164,18 @@ def run_scenarios() -> list[dict]:
         "compromised_node_unsafe_forgery",
         "Fully compromised validator node mints a genuinely signed token for a gold-labeled unsafe task",
         _base_state(unsafe_task["task_id"], unsafe_task["action"], unsafe_task["resource_scope"], unsafe_token),
+    )
+
+    # 9. Compromised-node task_id forgery: real secret, task_id absent from the labeled corpus.
+    # Before the A1 fix, security/policy.py's task_by_id() raised an unhandled
+    # StopIteration here instead of a controlled deny -- this scenario is the
+    # regression test for that fix.
+    forged_task_id = "EMAIL-DOES-NOT-EXIST"
+    forged_id_token = issue(forged_task_id, safe_task["action"], safe_task["resource_scope"], secret)
+    record(
+        "compromised_node_unknown_task_id",
+        "Fully compromised validator node mints a genuinely signed token for a task_id absent from the labeled corpus",
+        _base_state(forged_task_id, safe_task["action"], safe_task["resource_scope"], forged_id_token),
     )
 
     return results

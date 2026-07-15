@@ -1,4 +1,5 @@
 langgraph
 langchain
 langchain-groq
+langchain-google-genai
 python-dotenv

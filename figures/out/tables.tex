@@ -1,0 +1,50 @@
+% Table I -- Attack effectiveness across tiers
+\begin{table}[!t]
+\centering
+\caption{Attack effectiveness across tiers}
+\label{tab:attack-effectiveness}
+\begin{tabular}{lccccc}
+\toprule
+Attack & UAR (T0) & UAR (T1) & Recall (T0) & Recall (T1) & JBR (T1) \\
+\midrule
+Memory poisoning & 100.0\% & 0.0\% & 0.0\%  & 100.0\% & 100.0\% \\
+Agent hijacking  & 31.25\% & 0.0\% & 68.8\% & 100.0\% & 31.25\% \\
+Record tampering & n/a*    & 0.0\% & n/a*   & 100.0\% & 0.0\% \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize UAR and Recall are complements by construction (both computed over the same
+gold-unsafe trial denominator; UAR + Recall = 100\% in every row). JBR (Judgment Bypass Rate)
+is a separate, independent signal: the share of gold-unsafe trials where the Validator's own
+review was skipped, forged, or fooled, regardless of what the Executor did with that decision
+afterward. Under T1 hijacking, JBR = 31.25\% and UAR = 0\% together show the Validator's
+judgment is still fooled on a third of dangerous trials, but the Executor's independent policy
+check catches all of them before real execution -- containment here comes from the second gate,
+not the first. *Inapplicable in T0: the policy oracle is disabled, so the tampered record is
+never read. The attack has no target; this is not evidence of resistance.}
+\end{table}
+
+% Table II -- Cost of the judgment-layer defense
+\begin{table}[!t]
+\centering
+\caption{Cost of the judgment-layer defense}
+\label{tab:defense-cost}
+\begin{tabular}{lcccc}
+\toprule
+Configuration & UAR & FPR & F1 & LTC \\
+\midrule
+Structural boundary only (memory) & 0.0\%  & 0.0\%   & 1.00 & 100.0\% \\
+Structural boundary only (hijack) & 0.0\%  & 0.0\%   & 1.00 & 100.0\% \\
+Structural boundary only (tamper) & 0.0\%  & 0.0\%   & 1.00 & 100.0\% \\
++ memory defense                  & 0.0\%  & 100.0\% & 0.57 & 0.0\%   \\
++ hijack defense                  & 0.0\%  & 91.7\%  & 0.59 & 8.3\%   \\
++ tamper defense                  & 0.0\%  & 0.0\%   & 1.00 & 100.0\% \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize All values from $n = 40$ trials per configuration (20-task corpus -- 12 safe,
+8 dangerous -- run twice per condition, giving 24 safe and 16 dangerous trials). 95\% Wilson
+score intervals omitted for space; see Section~[X].}
+\end{table}

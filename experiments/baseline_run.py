@@ -14,6 +14,9 @@ config.DEFENSE_MODE = False
 from evaluation.logger import log_run
 from experiments.tasks import TASK_RECORDS
 from main import INITIAL_STATE, build_graph
+from security.policy import sync_from_ground_truth
+
+sync_from_ground_truth()
 
 
 def run_baseline() -> None:

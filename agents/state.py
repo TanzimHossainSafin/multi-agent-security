@@ -12,6 +12,8 @@ class AgentState(TypedDict):
     proposed_action: str
     resource_scope: list[str]
     authorization: dict
+    review_challenge: str
+    review_attestation: str
     messages: Annotated[list, add_messages]
     research_output: str
     validator_approved: bool
@@ -23,4 +25,6 @@ class AgentState(TypedDict):
     trust_hops: int
     unsafe_action: bool
     policy_violation: bool
+    would_execute: bool
+    verdict_source: str
     steps: list

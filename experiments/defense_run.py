@@ -6,8 +6,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 attack_arg = sys.argv[1] if len(sys.argv) > 1 else "hijack"
-if attack_arg not in ("memory", "hijack"):
-    raise SystemExit("Usage: python experiments/defense_run.py [memory|hijack]")
+if attack_arg not in ("memory", "hijack", "tamper"):
+    raise SystemExit("Usage: python experiments/defense_run.py [memory|hijack|tamper]")
 
 import config
 
@@ -18,6 +18,15 @@ config.DEFENSE_MODE = True
 from evaluation.logger import log_run
 from experiments.tasks import TASK_RECORDS
 from main import INITIAL_STATE, build_graph
+from security.policy import sync_from_ground_truth
+
+# Sync first (pins the integrity signature to legitimate content), then
+# tamper -- this is what lets verify_integrity() in security/policy.py
+# detect the corruption instead of silently trusting it.
+sync_from_ground_truth()
+if attack_arg == "tamper":
+    from attacks.ground_truth_tampering import tamper_policy_view
+    tamper_policy_view()
 
 
 def run_defense() -> None:
@@ -32,6 +41,7 @@ def run_defense() -> None:
             "task_id": record["task_id"],
             "trial_id": trial,
             "attack_type": attack_arg,
+            "attack_injected": attack_arg == "tamper",
         })
         log_run(result, trial)
     print("[DEFENSE] Complete")

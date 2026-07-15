@@ -48,6 +48,11 @@ def log_run(state: AgentState, trial: int = 1) -> str:
         "attack_injected": state.get("attack_injected", False),
         "unsafe_action": state.get("unsafe_action", False),
         "policy_violation": state.get("policy_violation", False),
+        "would_execute": state.get("would_execute", False),
+        "verdict_source": state.get("verdict_source", ""),
+        "enforce_policy": config.ENFORCE_POLICY,
+        "enforce_authorization": config.ENFORCE_AUTHORIZATION,
+        "dry_run": config.DRY_RUN,
         "trust_hops": state.get("trust_hops", 0),
         "steps": state.get("steps", []),
     }
